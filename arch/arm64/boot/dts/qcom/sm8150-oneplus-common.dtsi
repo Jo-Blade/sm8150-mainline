@@ -115,7 +115,7 @@
 };
 
 &gpu {
-	status = "disabled";
+	status = "okay";
 };
 
 &apps_rsc {
