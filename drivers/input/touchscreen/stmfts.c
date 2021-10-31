@@ -5,6 +5,7 @@
 // Copyright (c) 2017 Andi Shyti <andi@etezian.org>
 
 #include <linux/delay.h>
+#include <linux/gpio/consumer.h>
 #include <linux/i2c.h>
 #include <linux/input/mt.h>
 #include <linux/input/touchscreen.h>
@@ -83,6 +84,9 @@ struct stmfts_data {
 	struct touchscreen_properties prop;
 
 	struct regulator_bulk_data regulators[2];
+
+	/* optional pin to be flipped during power on sequence */
+	struct gpio_desc *reset_gpio;
 
 	/*
 	 * Presence of ledvdd will be used also to check
@@ -536,6 +540,17 @@ static int stmfts_power_on(struct stmfts_data *sdata)
 	 */
 	msleep(20);
 
+	/* flip reset gpio after turning on DVDD & AVDD */
+	if (sdata->reset_gpio) {
+		printk("stmfts_power_on: setting reset_gpio to 0");
+		gpiod_set_value_cansleep(sdata->reset_gpio, 0);
+		msleep(100);
+		printk("stmfts_power_on: setting reset_gpio to 1");
+		gpiod_set_value_cansleep(sdata->reset_gpio, 1);
+		msleep(50);
+	}
+
+	printk("stmfts_power_on: reading STMFTS_READ_INFO over i2c...");
 	err = i2c_smbus_read_i2c_block_data(sdata->client, STMFTS_READ_INFO,
 					    sizeof(reg), reg);
 	if (err < 0)
@@ -593,6 +608,8 @@ static void stmfts_power_off(void *data)
 	disable_irq(sdata->client->irq);
 	regulator_bulk_disable(ARRAY_SIZE(sdata->regulators),
 						sdata->regulators);
+	if (sdata->reset_gpio)
+		gpiod_set_value_cansleep(sdata->reset_gpio, 0);
 }
 
 /* This function is void because I don't want to prevent using the touch key
@@ -650,6 +667,16 @@ static int stmfts_probe(struct i2c_client *client,
 				      sdata->regulators);
 	if (err)
 		return err;
+	
+	sdata->reset_gpio = devm_gpiod_get_optional(&client->dev, "reset", GPIOD_OUT_LOW);
+	if (IS_ERR(sdata->reset_gpio)) {
+		err = PTR_ERR(sdata->reset_gpio);
+		if (err != -EPROBE_DEFER)
+			dev_err(&client->dev, "failed to request reset GPIO: %d\n", err);
+		return err;
+	} else {
+		printk("stmfts_probe: found reset-gpio, will use");
+	}
 
 	sdata->input = devm_input_allocate_device(&client->dev);
 	if (!sdata->input)
@@ -701,8 +728,13 @@ static int stmfts_probe(struct i2c_client *client,
 	dev_dbg(&client->dev, "initializing ST-Microelectronics FTS...\n");
 
 	err = stmfts_power_on(sdata);
-	if (err)
+	if (err) {
+		dev_err(&client->dev, "failed to power_on!");
+		dev_err(&client->dev, "Will sleep for 1 minute!");
+		msleep(60000);
+		stmfts_power_off(sdata);
 		return err;
+	}
 
 	err = devm_add_action_or_reset(&client->dev, stmfts_power_off, sdata);
 	if (err)
