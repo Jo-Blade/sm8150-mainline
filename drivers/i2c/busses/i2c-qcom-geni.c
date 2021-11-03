@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 // Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
 
+#define DEBUG
+
 #include <linux/acpi.h>
 #include <linux/clk.h>
 #include <linux/dmaengine.h>
@@ -720,12 +722,12 @@ static int setup_gpi_dma(struct geni_i2c_dev *gi2c)
 
 	geni_se_select_mode(&gi2c->se, GENI_GPI_DMA);
 	gi2c->tx_c = dma_request_chan(gi2c->se.dev, "tx");
-	ret = dev_err_probe(gi2c->se.dev, IS_ERR(gi2c->tx_c), "Failed to get tx DMA ch\n");
+	ret = dev_err_probe(gi2c->se.dev, PTR_ERR_OR_ZERO(gi2c->tx_c), "Failed to get tx DMA ch\n");
 	if (ret < 0)
 		goto err_tx;
 
 	gi2c->rx_c = dma_request_chan(gi2c->se.dev, "rx");
-	ret = dev_err_probe(gi2c->se.dev, IS_ERR(gi2c->rx_c), "Failed to get rx DMA ch\n");
+	ret = dev_err_probe(gi2c->se.dev, PTR_ERR_OR_ZERO(gi2c->rx_c), "Failed to get rx DMA ch\n");
 	if (ret < 0)
 		goto err_rx;
 
