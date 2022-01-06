@@ -3,6 +3,8 @@
  * Copyright (c) 2013-2016, Linux Foundation. All rights reserved.
  */
 
+#define DEBUG
+
 #include <linux/acpi.h>
 #include <linux/time.h>
 #include <linux/of.h>
@@ -18,8 +20,10 @@
 #include "ufs-qcom.h"
 #include "ufshci.h"
 #include "ufs_quirks.h"
-#define UFS_QCOM_DEFAULT_DBG_PRINT_EN	\
-	(UFS_QCOM_DBG_PRINT_REGS_EN | UFS_QCOM_DBG_PRINT_TEST_BUS_EN)
+
+/*#define UFS_QCOM_DEFAULT_DBG_PRINT_EN	\
+	(UFS_QCOM_DBG_PRINT_REGS_EN | UFS_QCOM_DBG_PRINT_TEST_BUS_EN)*/
+#define UFS_QCOM_DEFAULT_DBG_PRINT_EN	UFS_QCOM_DBG_PRINT_REGS_EN
 
 enum {
 	TSTBUS_UAWM,
@@ -100,6 +104,8 @@ static int ufs_qcom_host_clk_enable(struct device *dev,
 	err = clk_prepare_enable(clk);
 	if (err)
 		dev_err(dev, "%s: %s enable failed %d\n", __func__, name, err);
+	else
+		dev_info(dev, "%s: %s enable OK", __func__, name);
 
 	return err;
 }
@@ -122,8 +128,10 @@ static int ufs_qcom_enable_lane_clks(struct ufs_qcom_host *host)
 	int err = 0;
 	struct device *dev = host->hba->dev;
 
-	if (host->is_lane_clks_enabled)
+	if (host->is_lane_clks_enabled) {
+		dev_dbg(dev, "%s: clocks already enabled", __func__);
 		return 0;
+	}
 
 	err = ufs_qcom_host_clk_enable(dev, "rx_lane0_sync_clk",
 		host->rx_l0_sync_clk);
@@ -146,6 +154,9 @@ static int ufs_qcom_enable_lane_clks(struct ufs_qcom_host *host)
 		goto disable_rx_l1;
 
 	host->is_lane_clks_enabled = true;
+
+	dev_info(dev, "%s: clocks enabled OK", __func__);
+
 	goto out;
 
 disable_rx_l1:
@@ -175,6 +186,9 @@ static int ufs_qcom_init_lane_clks(struct ufs_qcom_host *host)
 					&host->tx_l0_sync_clk, false);
 	if (err)
 		goto out;
+	
+	dev_dbg(dev, "%s: host->hba->lanes_per_direction: %u", __func__,
+		host->hba->lanes_per_direction);
 
 	/* In case of single lane per direction, don't read lane1 clocks */
 	if (host->hba->lanes_per_direction > 1) {
@@ -239,6 +253,8 @@ static int ufs_qcom_check_hibern8(struct ufs_hba *hba)
 
 static void ufs_qcom_select_unipro_mode(struct ufs_qcom_host *host)
 {
+	dev_dbg(host->hba->dev, "%s: is unipro: %d", __func__, ufs_qcom_cap_qunipro(host));
+
 	ufshcd_rmwl(host->hba, QUNIPRO_SEL,
 		   ufs_qcom_cap_qunipro(host) ? QUNIPRO_SEL : 0,
 		   REG_UFS_CFG1);
@@ -259,6 +275,9 @@ static int ufs_qcom_host_reset(struct ufs_hba *hba)
 		dev_warn(hba->dev, "%s: reset control not set\n", __func__);
 		goto out;
 	}
+
+	dev_info(hba->dev, "%s: Will disable IRQ %u, currently enabled: %d",
+		__func__, hba->irq, hba->is_irq_enabled);
 
 	reenable_intr = hba->is_irq_enabled;
 	disable_irq(hba->irq);
@@ -286,9 +305,12 @@ static int ufs_qcom_host_reset(struct ufs_hba *hba)
 	usleep_range(1000, 1100);
 
 	if (reenable_intr) {
+		dev_info(hba->dev, "%s: Will re-enable IRQ %u", __func__, hba->irq);
 		enable_irq(hba->irq);
 		hba->is_irq_enabled = true;
 	}
+
+	dev_info(hba->dev, "%s: complete", __func__);
 
 out:
 	return ret;
@@ -301,6 +323,9 @@ static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
 	int ret = 0;
 	bool is_rate_B = (UFS_QCOM_LIMIT_HS_RATE == PA_HS_MODE_B)
 							? true : false;
+	
+	dev_info(hba->dev, "%s: start, is_rate_B: %s", __func__,
+		 is_rate_B ? "true" : "false");
 
 	/* Reset UFS Host Controller and PHY */
 	ret = ufs_qcom_host_reset(hba);
@@ -328,6 +353,8 @@ static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
 	}
 
 	ufs_qcom_select_unipro_mode(host);
+
+	dev_info(hba->dev, "%s: completed OK", __func__);
 
 	return 0;
 
@@ -363,6 +390,7 @@ static int ufs_qcom_hce_enable_notify(struct ufs_hba *hba,
 
 	switch (status) {
 	case PRE_CHANGE:
+		dev_dbg(hba->dev, "%s: PRE_CHANGE", __func__);
 		ufs_qcom_power_up_sequence(hba);
 		/*
 		 * The PHY PLL output is the source of tx/rx lane symbol
@@ -372,6 +400,7 @@ static int ufs_qcom_hce_enable_notify(struct ufs_hba *hba,
 		err = ufs_qcom_enable_lane_clks(host);
 		break;
 	case POST_CHANGE:
+		dev_dbg(hba->dev, "%s: POST_CHANGE", __func__);
 		/* check if UFS PHY moved from DISABLED to HIBERN8 */
 		err = ufs_qcom_check_hibern8(hba);
 		ufs_qcom_enable_hw_clk_gating(hba);
@@ -382,6 +411,7 @@ static int ufs_qcom_hce_enable_notify(struct ufs_hba *hba,
 		err = -EINVAL;
 		break;
 	}
+	dev_info(hba->dev, "%s: returning %d", __func__, err);
 	return err;
 }
 
@@ -988,8 +1018,10 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 	struct resource *res;
 	struct ufs_clk_info *clki;
 
-	if (strlen(android_boot_dev) && strcmp(android_boot_dev, dev_name(dev)))
+	if (strlen(android_boot_dev) && strcmp(android_boot_dev, dev_name(dev))) {
+		dev_err(hba->dev, "%s: androidboot.bootdevice check fail!", __func__);
 		return -ENODEV;
+	}
 
 	host = devm_kzalloc(dev, sizeof(*host), GFP_KERNEL);
 	if (!host) {
@@ -1109,6 +1141,8 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 				__func__, err);
 		err = 0;
 	}
+
+	dev_info(hba->dev, "%s: returning OK", __func__);
 
 	goto out;
 
@@ -1448,6 +1482,8 @@ static int ufs_qcom_device_reset(struct ufs_hba *hba)
 	/* reset gpio is optional */
 	if (!host->device_reset)
 		return -EOPNOTSUPP;
+
+	dev_info(hba->dev, "%s: flipping device_reset GPIO", __func__);
 
 	/*
 	 * The UFS device shall detect reset pulses of 1us, sleep for 10us to

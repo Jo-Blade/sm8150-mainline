@@ -9,6 +9,8 @@
  *	Vinayak Holikatti <h.vinayak@samsung.com>
  */
 
+#define DEBUG
+
 #include <linux/async.h>
 #include <linux/devfreq.h>
 #include <linux/nls.h>
@@ -897,8 +899,10 @@ static inline void ufshcd_hba_start(struct ufs_hba *hba)
 {
 	u32 val = CONTROLLER_ENABLE;
 
-	if (ufshcd_crypto_enable(hba))
+	if (ufshcd_crypto_enable(hba)) {
+		dev_info(hba->dev, "%s: will also add CRYPTO_GENERAL_ENABLE", __func__);
 		val |= CRYPTO_GENERAL_ENABLE;
+	}
 
 	ufshcd_writel(hba, val, REG_CONTROLLER_ENABLE);
 }
