@@ -36,6 +36,12 @@
 	model = "Xiaomi Mi 9";
 	compatible = "xiaomi,cepheus", "qcom,sm8150";
 
+	/* something for bootloader */
+	qcom,msm-name = "SM8150 V2";
+	qcom,msm-id = <0x153 0x20000>;
+	qcom,pmic-name = "PM8150";
+	qcom,board-id = <0x25 0x00>;
+
 	aliases {
 		serial0 = &uart2;
 		display0 = &framebuffer;
@@ -496,6 +502,38 @@
 		};
 	};
 };
+
+// &gpi_dma2 {
+// 	status = "okay";
+// };
+
+// &i2c17 {
+// 	status = "okay";
+// 	clock-frequency = <400000>;
+
+// 	dmas = <&gpi_dma2 0 0 QCOM_GPI_I2C>, <&gpi_dma2 1 0 QCOM_GPI_I2C>;
+// 	dma-names = "tx", "rx";
+
+// 	touchscreen@49 {
+// 		compatible = "st,stmfts";
+// 		reg = <0x49>;
+// 		interrupt-parent = <&tlmm>;
+// 		interrupts = <122 0x2008 /*IRQ_TYPE_LEVEL_LOW*/>;
+
+// 		touchscreen-size-x = <1080>;
+// 		touchscreen-size-y = <2340>;
+
+// 		avdd-supply = <&vreg_l1c_1p8>;
+// 		vdd-supply = <&touch_vddio_vreg>;
+// 		reset-gpios = <&tlmm 12 GPIO_ACTIVE_HIGH>;
+
+// 		pinctrl-names = "default"; //, "sleep";
+// 		pinctrl-0 = <&ts_reset_pin_active &ts_int_pin_active>;
+// 		pinctrl-1 = <&ts_reset_pin_sleep &ts_int_pin_sleep>;
+
+// 		// status = "disabled"; /* does not work yet */
+// 	};
+// };
 
 &pm8150_gpios {
 	vol_up_pin_a: vol-up-active {
