@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2017, The Linux Foundation. All rights reserved.
  */
+ #define DEBUG
 
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
@@ -16,6 +17,7 @@
 #include <linux/of_address.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
+#include <linux/pm_domain.h>
 #include <linux/regulator/consumer.h>
 #include <linux/reset.h>
 #include <linux/slab.h>
@@ -3131,6 +3133,9 @@ struct qmp_phy_cfg {
 	/* regulators to be requested */
 	const char * const *vreg_list;
 	int num_vregs;
+	/* power-domains to be requested */
+	const char * const *pd_list;
+	int num_pds;
 
 	/* array of registers with different offsets */
 	const unsigned int *regs;
@@ -3221,6 +3226,7 @@ struct qmp_phy_dp_clks {
  * @clks: array of clocks required by phy
  * @resets: array of resets required by phy
  * @vregs: regulator supplies bulk data
+ * @power_domains: array of power domains required by phy
  *
  * @phys: array of per-lane phy descriptors
  * @phy_mutex: mutex lock for PHY common block initialization
@@ -3234,6 +3240,7 @@ struct qcom_qmp {
 	struct clk_bulk_data *clks;
 	struct reset_control **resets;
 	struct regulator_bulk_data *vregs;
+	struct device **power_domains;
 
 	struct qmp_phy **phys;
 
@@ -3344,6 +3351,14 @@ static const char * const sdm845_pciephy_reset_l[] = {
 /* list of regulators */
 static const char * const qmp_phy_vreg_l[] = {
 	"vdda-phy", "vdda-pll",
+};
+
+/* list of power-domain names */
+static const char * const sm8150_ufsphy_pds_list[] = {
+	"ufs_card_gdsc",
+	"ufs_phy_gdsc",
+	"mx",
+	"cx",
 };
 
 static const struct qmp_phy_cfg ipq8074_usb3phy_cfg = {
@@ -3914,6 +3929,8 @@ static const struct qmp_phy_cfg sm8150_ufsphy_cfg = {
 	.num_clks		= ARRAY_SIZE(sdm845_ufs_phy_clk_l),
 	.vreg_list		= qmp_phy_vreg_l,
 	.num_vregs		= ARRAY_SIZE(qmp_phy_vreg_l),
+	.pd_list		= sm8150_ufsphy_pds_list,
+	.num_pds		= ARRAY_SIZE(sm8150_ufsphy_pds_list),
 	.regs			= sm8150_ufsphy_regs_layout,
 
 	.start_ctrl		= SERDES_START,
@@ -5500,6 +5517,50 @@ static int qcom_qmp_phy_vreg_init(struct device *dev, const struct qmp_phy_cfg *
 	return devm_regulator_bulk_get(dev, num, qmp->vregs);
 }
 
+static int qcom_qmp_phy_pds_init(struct device *dev, const struct qmp_phy_cfg *cfg)
+{
+	struct qcom_qmp *qmp = dev_get_drvdata(dev);
+	int i;
+	int ret = 0;
+
+	if (cfg->num_pds == 0) {
+		dev_dbg(dev, "No power domains specified for this phy.");
+		qmp->power_domains = NULL;
+		return 0;
+	}
+	dev_dbg(dev, "qcom_qmp_phy_pds_init: start");
+
+	qmp->power_domains = devm_kcalloc(dev, cfg->num_pds,
+					sizeof(*qmp->power_domains), GFP_KERNEL);
+	if (!qmp->power_domains)
+		return -ENOMEM;
+
+	for (i = 0; i < cfg->num_pds; i++) {
+		struct device *pddev;
+		const char *name = cfg->pd_list[i];
+
+		dev_dbg(dev, "  getting power-domain: %s\n", name);
+		pddev = dev_pm_domain_attach_by_name(dev, name);
+		if (IS_ERR_OR_NULL(pddev)) {
+			dev_err(dev, "failed to get power-domain: %s\n", name);
+			ret = PTR_ERR(pddev);
+			goto unroll_attach;
+		}
+		ret = pm_runtime_get_sync(pddev);
+		dev_pm_genpd_set_performance_state(pddev, INT_MAX);
+		qmp->power_domains[i] = pddev;
+	}
+
+	dev_dbg(dev, "qcom_qmp_phy_pds_init: end OK");
+	return 0;
+
+unroll_attach:
+	for (i--; i >= 0; i--)
+		dev_pm_domain_detach(qmp->power_domains[i], false);
+
+	return ret;
+}
+
 static int qcom_qmp_phy_reset_init(struct device *dev, const struct qmp_phy_cfg *cfg)
 {
 	struct qcom_qmp *qmp = dev_get_drvdata(dev);
@@ -6161,6 +6222,10 @@ static int qcom_qmp_phy_probe(struct platform_device *pdev)
 		return ret;
 
 	ret = qcom_qmp_phy_reset_init(dev, cfg);
+	if (ret)
+		return ret;
+
+	ret = qcom_qmp_phy_pds_init(dev, cfg);
 	if (ret)
 		return ret;
 
