@@ -242,6 +242,11 @@ static int rpmh_regulator_set_enable_state(struct regulator_dev *rdev,
 			return ret;
 	}
 
+	if (!enable) {
+		dev_info(&rdev->dev, "HACK: Not disabling regulator %s\n", rdev->supply_name);
+		return 0;
+	}
+
 	ret = rpmh_regulator_send_request(vreg, &cmd, enable);
 	if (!ret)
 		vreg->enabled = enable;

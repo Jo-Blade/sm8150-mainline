@@ -141,6 +141,11 @@ static int gdsc_toggle_logic(struct gdsc *sc, enum gdsc_status status)
 		ret = regulator_enable(sc->rsupply);
 		if (ret < 0)
 			return ret;
+	} 
+	
+	if (status == GDSC_OFF) {
+		dev_info(sc->dev, "HACK: Not disabling %s\n", sc->supply);
+		return 0;
 	}
 
 	ret = regmap_update_bits(sc->regmap, sc->gdscr, SW_COLLAPSE_MASK, val);

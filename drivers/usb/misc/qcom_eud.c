@@ -185,6 +185,7 @@ static int eud_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	chip->dev = &pdev->dev;
+	chip->enabled = true;
 
 	chip->role_sw = usb_role_switch_get(&pdev->dev);
 	if (IS_ERR(chip->role_sw))
@@ -213,6 +214,10 @@ static int eud_probe(struct platform_device *pdev)
 	enable_irq_wake(chip->irq);
 
 	platform_set_drvdata(pdev, chip);
+
+	enable_eud(chip);
+
+	printk(KERN_INFO, "Qcom EUD!\n");
 
 	return 0;
 }
