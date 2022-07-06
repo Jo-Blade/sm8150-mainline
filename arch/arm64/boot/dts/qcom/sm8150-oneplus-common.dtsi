@@ -24,6 +24,7 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+		bootargs = "earlycon=qcom_geni,a90000 console=ttyMSM0,115200";
 	};
 
 	gpio-keys {
@@ -341,6 +342,7 @@
 
 		vdda_wcss_adcdac_1:
 		vdda_wcss_adcdac_22:
+		vdda_mipi_dsi0_1p2:
 		vreg_l2c_1p3: ldo2 {
 			regulator-min-microvolt = <1304000>;
 			regulator-max-microvolt = <1304000>;
@@ -441,6 +443,20 @@
 	};
 };
 
+&mdss_dsi0 {
+	status = "okay";
+	vdda-supply = <&vdda_mipi_dsi0_1p2>;
+};
+
+&mdss_dsi0_phy {
+	status = "okay";
+	vdds-supply = <&vdda_dsi_0_pll_0p9>;
+};
+
+&mdss {
+	status = "disabled";
+};
+
 &qupv3_id_1 {
 	status = "okay";
 };
@@ -498,7 +514,7 @@
 	firmware-name = "qcom/sm8150/oneplus7/modem.mdt";
 };
 
-// Some of these might be guacamole specific
+// FIXME: Some of these might be guacamole specific
 &tlmm {
 	gpio-reserved-ranges = <0 4>, <126 4>;
 
@@ -548,7 +564,7 @@
 };
 
 &ufs_mem_hc {
-	status = "disabled";
+	status = "okay";
 
 	reset-gpios = <&tlmm 175 GPIO_ACTIVE_LOW>;
 
@@ -561,7 +577,7 @@
 };
 
 &ufs_mem_phy {
-	status = "disabled";
+	status = "okay";
 
 	vdda-phy-supply = <&vdda_ufs_2ln_core_1>;
 	vdda-max-microamp = <90200>;

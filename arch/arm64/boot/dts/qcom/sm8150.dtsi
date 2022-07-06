@@ -3704,6 +3704,31 @@
 				snps,dis_enblslpm_quirk;
 				phys = <&usb_2_hsphy>, <&usb_2_ssphy>;
 				phy-names = "usb2-phy", "usb3-phy";
+				usb-role-switch;
+				usb_con: eud_usb_connector {
+					compatible = "qcom,usb-connector-eud",
+						     "usb-c-connector";
+					ports {
+						port@0 {
+							usb2_role_switch: endpoint {
+								remote-endpoint = <&eud_ep>;
+							};
+						};
+					};
+				};
+			};
+		};
+
+		eud:  eud@88e0000 {
+			compatible = "qcom,sc7280-eud","qcom,eud";
+			reg = <0 0x88e0000 0 0x2000>,
+			      <0 0x88e2000 0 0x1000>;
+			interrupt-parent = <&pdc>;
+			interrupts = <11 IRQ_TYPE_LEVEL_HIGH>;
+			port {
+				eud_ep: endpoint {
+					remote-endpoint = <&usb2_role_switch>;
+				};
 			};
 		};
 
@@ -3757,6 +3782,35 @@
 			#size-cells = <2>;
 			ranges;
 
+			dsi_opp_table: dsi-opp-table {
+				compatible = "operating-points-v2";
+
+				opp-19200000 {
+					opp-hz = /bits/ 64 <19200000>;
+					required-opps = <&rpmhpd_opp_min_svs>;
+				};
+
+				opp-180000000 {
+					opp-hz = /bits/ 64 <180000000>;
+					required-opps = <&rpmhpd_opp_low_svs>;
+				};
+
+				opp-275000000 {
+					opp-hz = /bits/ 64 <275000000>;
+					required-opps = <&rpmhpd_opp_svs>;
+				};
+
+				opp-328580000 {
+					opp-hz = /bits/ 64 <328580000>;
+					required-opps = <&rpmhpd_opp_svs_l1>;
+				};
+
+				opp-358000000 {
+					opp-hz = /bits/ 64 <358000000>;
+					required-opps = <&rpmhpd_opp_nom>;
+				};
+			};
+
 			mdss_mdp: mdp@ae01000 {
 				compatible = "qcom,sm8150-dpu";
 				reg = <0 0x0ae01000 0 0x8f000>,
@@ -3773,10 +3827,37 @@
 				assigned-clock-rates = <460000000>,
 						       <19200000>;
 
+				operating-points-v2 = <&mdp_opp_table>;
+				power-domains = <&rpmhpd SM8150_MMCX>;
+
 				interrupt-parent = <&mdss>;
 				interrupts = <0 IRQ_TYPE_LEVEL_HIGH>;
 
 				status = "disabled";
+
+				mdp_opp_table: mdp-opp-table {
+					compatible = "operating-points-v2";
+
+					opp-200000000 {
+						opp-hz = /bits/ 64 <200000000>;
+						required-opps = <&rpmhpd_opp_low_svs>;
+					};
+
+					opp-300000000 {
+						opp-hz = /bits/ 64 <300000000>;
+						required-opps = <&rpmhpd_opp_svs>;
+					};
+
+					opp-345000000 {
+						opp-hz = /bits/ 64 <345000000>;
+						required-opps = <&rpmhpd_opp_svs_l1>;
+					};
+
+					opp-460000000 {
+						opp-hz = /bits/ 64 <460000000>;
+						required-opps = <&rpmhpd_opp_nom>;
+					};
+				};
 
 				ports {
 					#address-cells = <1>;
@@ -3805,7 +3886,7 @@
 				};
 			};
 
-			dsi0: dsi@ae94000 {
+			mdss_dsi0: dsi@ae94000 {
 				compatible = "qcom,mdss-dsi-ctrl";
 				reg = <0 0x0ae94000 0 0x400>;
 				reg-names = "dsi_ctrl";
@@ -3825,8 +3906,15 @@
 					      "core",
 					      "iface",
 					      "bus";
+				
+				assigned-clocks = <&dispcc DISP_CC_MDSS_BYTE0_CLK_SRC>,
+						  <&dispcc DISP_CC_MDSS_PCLK0_CLK_SRC>;
+				assigned-clock-parents = <&mdss_dsi0_phy 0>, <&mdss_dsi0_phy 1>;
 
-				phys = <&dsi0_phy>;
+				operating-points-v2 = <&dsi_opp_table>;
+				power-domains = <&rpmhpd SM8150_MMCX>;
+
+				phys = <&mdss_dsi0_phy>;
 				phy-names = "dsi";
 
 				status = "disabled";
@@ -3850,7 +3938,7 @@
 				};
 			};
 
-			dsi0_phy: dsi-phy@ae94400 {
+			mdss_dsi0_phy: dsi-phy@ae94400 {
 				compatible = "qcom,dsi-phy-7nm";
 				reg = <0 0x0ae94400 0 0x200>,
 				      <0 0x0ae94600 0 0x280>,
@@ -3869,7 +3957,7 @@
 				status = "disabled";
 			};
 
-			dsi1: dsi@ae96000 {
+			mdss_dsi1: dsi@ae96000 {
 				compatible = "qcom,mdss-dsi-ctrl";
 				reg = <0 0x0ae96000 0 0x400>;
 				reg-names = "dsi_ctrl";
@@ -3890,7 +3978,14 @@
 					      "iface",
 					      "bus";
 
-				phys = <&dsi1_phy>;
+				assigned-clocks = <&dispcc DISP_CC_MDSS_BYTE1_CLK_SRC>,
+						  <&dispcc DISP_CC_MDSS_PCLK1_CLK_SRC>;
+				assigned-clock-parents = <&mdss_dsi1_phy 0>, <&mdss_dsi1_phy 1>;
+
+				operating-points-v2 = <&dsi_opp_table>;
+				power-domains = <&rpmhpd SM8150_MMCX>;
+
+				phys = <&mdss_dsi1_phy>;
 				phy-names = "dsi";
 
 				status = "disabled";
@@ -3914,7 +4009,7 @@
 				};
 			};
 
-			dsi1_phy: dsi-phy@ae96400 {
+			mdss_dsi1_phy: dsi-phy@ae96400 {
 				compatible = "qcom,dsi-phy-7nm";
 				reg = <0 0x0ae96400 0 0x200>,
 				      <0 0x0ae96600 0 0x280>,
@@ -3985,10 +4080,10 @@
 			compatible = "qcom,sm8150-dispcc";
 			reg = <0 0x0af00000 0 0x10000>;
 			clocks = <&rpmhcc RPMH_CXO_CLK>,
-				 <&dsi0_phy 0>,
-				 <&dsi0_phy 1>,
-				 <&dsi1_phy 0>,
-				 <&dsi1_phy 1>,
+				 <&mdss_dsi0_phy 0>,
+				 <&mdss_dsi0_phy 1>,
+				 <&mdss_dsi1_phy 0>,
+				 <&mdss_dsi1_phy 1>,
 				 <&dp_phy 0>,
 				 <&dp_phy 1>;
 			clock-names = "bi_tcxo",
