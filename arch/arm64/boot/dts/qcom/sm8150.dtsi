@@ -1690,8 +1690,13 @@
 				 <&gcc GCC_UFS_PHY_PHY_AUX_CLK>;
 
 			power-domains = <&gcc UFS_CARD_GDSC>,
-					<&gcc UFS_PHY_GDSC>;
-			power-domain-names = "ufs_card_gdsc", "ufs_phy_gdsc";
+					<&gcc UFS_PHY_GDSC>,
+					<&rpmhpd SM8150_MX>,
+					<&rpmhpd SM8150_CX>;
+			power-domain-names = "ufs_card_gdsc",
+					"ufs_phy_gdsc",
+					"mx",
+					"cx";
 			resets = <&ufs_mem_hc 0>;
 			reset-names = "ufsphy";
 			status = "disabled";
